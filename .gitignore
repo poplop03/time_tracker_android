@@ -50,3 +50,6 @@ app.*.map.json
 # Release signing — never commit these
 android/key.properties
 android/*.jks
+
+# Golden-test diff artefacts
+test/failures/
