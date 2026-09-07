@@ -15,13 +15,17 @@ a calendar yourself.
 
 ## Install on a phone
 
-Grab the APK from the [latest release](../../releases/latest):
+Build the APKs, then copy the one that matches your phone across:
 
-| File | Use it when |
+```bash
+flutter build apk --release --split-per-abi
+```
+
+| `build/app/outputs/flutter-apk/…` | Use it when |
 | --- | --- |
-| `tally-arm64-v8a.apk` | Any phone from roughly 2016 on. **Start here.** |
-| `tally-armeabi-v7a.apk` | Older 32-bit device. |
-| `tally-universal.apk` | You are not sure — works everywhere, just larger. |
+| `app-arm64-v8a-release.apk` | Any phone from roughly 2016 on. **Start here.** |
+| `app-armeabi-v7a-release.apk` | Older 32-bit device. |
+| `app-release.apk` | Not sure — universal, works everywhere, just larger. |
 
 Android will ask you to allow installing from your browser or file manager the
 first time. The app then asks for notification permission, which is what keeps
@@ -71,7 +75,7 @@ Requires Flutter stable (3.47+) and the Android SDK.
 ```bash
 flutter pub get
 dart run build_runner build      # drift database code
-flutter test                     # 53 tests, including one golden per screen
+flutter test                     # 59 tests, including one golden per screen
 flutter build apk --release --split-per-abi
 ```
 
