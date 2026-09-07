@@ -41,7 +41,7 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
       ref.read(timerServiceProvider).init();
       await ref.read(timerServiceProvider).requestPermissions();
       await actions.reconcile();
-      await _restoreGoogleSession();
+      await _checkCalendarAccess();
     });
   }
 
@@ -61,17 +61,15 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
     }
   }
 
-  /// A connected calendar is only useful while the Google session survives.
-  /// Restore it quietly on start, and say so on the Sync tab when it has gone.
-  Future<void> _restoreGoogleSession() async {
+  /// A connected calendar is only useful while the permission holds — the user
+  /// can revoke it in Android settings at any time. Check quietly on start and
+  /// say so on the Sync tab rather than failing at the next push.
+  Future<void> _checkCalendarAccess() async {
     if (!ref.read(settingsProvider).isConnected) return;
-    final String? email = await ref.read(calendarServiceProvider).restore();
-    if (!mounted) return;
-    if (email == null) {
-      await ref.read(settingsProvider.notifier).markNeedsReconnect();
-    } else {
-      await ref.read(settingsProvider.notifier).setAccount(email);
-    }
+    final bool granted =
+        await ref.read(calendarServiceProvider).hasPermission();
+    if (!mounted || granted) return;
+    await ref.read(settingsProvider.notifier).markNeedsReconnect();
   }
 
   void _onTaskData(Object data) {

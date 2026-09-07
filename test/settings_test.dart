@@ -12,7 +12,7 @@ void main() {
     expect(s.needsReconnect, isFalse);
   });
 
-  test('the signed-in account survives a restart', () async {
+  test('the calendar account survives a restart', () async {
     final SettingsStore store = await SettingsStore.open();
     await store.write(store.read().copyWith(
           calendarId: 'cal-1',
@@ -26,7 +26,7 @@ void main() {
     expect(reopened.isConnected, isTrue);
   });
 
-  test('disconnecting clears the account along with the calendar', () async {
+  test('stopping sync clears the account along with the calendar', () async {
     final SettingsStore store = await SettingsStore.open();
     await store.write(store.read().copyWith(
           calendarId: 'cal-1',

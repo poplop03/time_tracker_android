@@ -10,7 +10,7 @@ import '../../providers.dart';
 import '../../services/background_sync.dart';
 import '../shell/widgets.dart';
 import 'csv_export.dart';
-import 'google_calendar_service.dart';
+import 'device_calendar_service.dart';
 
 /// Four steps: intro, pick a calendar, choose a direction, then the connected
 /// status card.
@@ -69,6 +69,7 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                   onPick: (CalendarChoice c) => setState(() {
                     _pickedId = c.id;
                     _pickedName = c.name;
+                    _account = c.accountName;
                   }),
                   onCreate: _createCalendar,
                   onNext: _pickedId == null
@@ -104,10 +105,10 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
     });
     try {
       await action();
-    } on CalendarNotConfigured catch (e) {
+    } on CalendarPermissionDenied catch (e) {
       setState(() => _error = e.toString());
-    } on CalendarAuthExpired catch (e) {
-      setState(() => _error = e.toString());
+    } on CalendarFailure catch (e) {
+      setState(() => _error = e.message);
     } on Exception catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -116,31 +117,37 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
   }
 
   Future<void> _connect() => _guard(() async {
-        final GoogleCalendarService service =
+        final DeviceCalendarService service =
             ref.read(calendarServiceProvider);
-        // Signing in is the whole point of this step: without a Google account
-        // there is nothing to sync to.
-        _account = await service.connect();
-        await ref.read(settingsProvider.notifier).setAccount(_account);
+        // One permission prompt is the whole setup — the Google account already
+        // signed in on the phone is what makes these calendars sync.
         _calendars = await service.listCalendars();
         if (!mounted) return;
+        if (_calendars!.isEmpty) {
+          setState(() => _error =
+              'No writable calendars on this phone. Add a Google account in '
+              'Android Settings, then come back.');
+          return;
+        }
         setState(() => _step = 1);
       });
 
   Future<void> _createCalendar() => _guard(() async {
         final CalendarChoice created = await ref
             .read(calendarServiceProvider)
-            .createDedicatedCalendar('Time tracked');
+            .createLocalCalendar('Time tracked');
         if (!mounted) return;
         setState(() {
-          _calendars = <CalendarChoice>[created, ...?_calendars];
+          _calendars = <CalendarChoice>[...?_calendars, created];
           _pickedId = created.id;
           _pickedName = created.name;
+          _account = created.accountName;
         });
       });
 
   Future<void> _finish() async {
     if (_pickedId == null) return;
+    await ref.read(settingsProvider.notifier).setAccount(_account);
     await ref
         .read(settingsProvider.notifier)
         .setCalendar(_pickedId!, _pickedName ?? 'Calendar');
@@ -154,11 +161,10 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
         final Settings settings = ref.read(settingsProvider);
         final SyncOutcome outcome =
             await ref.read(syncEngineProvider).push(settings);
-        if (outcome.error == 'reconnect') {
+        if (outcome.error == 'permission') {
           await ref.read(settingsProvider.notifier).markNeedsReconnect();
           if (mounted) {
-            setState(() => _error =
-                'Google access expired — reconnect to keep syncing.');
+            setState(() => _error = CalendarPermissionDenied().toString());
           }
           return;
         }
@@ -170,7 +176,7 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
               : 'Pushed ${outcome.pushed} block'
                   '${outcome.pushed == 1 ? '' : 's'}'
                   '${outcome.skipped > 0 ? ', skipped ${outcome.skipped} short one${outcome.skipped == 1 ? '' : 's'}' : ''}.';
-          _error = outcome.error != null && outcome.error != 'reconnect'
+          _error = outcome.error != null && outcome.error != 'permission'
               ? outcome.error
               : null;
         });
@@ -178,7 +184,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
 
   Future<void> _disconnect() => _guard(() async {
         await BackgroundSync.cancel();
-        await ref.read(calendarServiceProvider).disconnect();
+        // Nothing to revoke: Tally only ever held a calendar permission, and
+        // events already written stay where they are.
         await ref.read(settingsProvider.notifier).setAccount(null);
         await ref.read(settingsProvider.notifier).disconnect();
         if (!mounted) return;
@@ -238,10 +245,15 @@ class _IntroStep extends StatelessWidget {
               style: context.texts.headlineMedium),
           const SizedBox(height: 8),
           Text(
-            'Sign in with the Google account whose calendar you want to use. '
-            'Tally then writes each finished block as an event on one calendar '
-            'you choose — it never touches your other calendars, and it never '
-            'creates blocks from your calendar without asking you first.',
+            'Tally writes each finished block onto a calendar already on this '
+            'phone. Whichever Google account is signed in on the device syncs '
+            'those events onwards on its own, so there is no separate login.',
+            style: context.texts.bodyMedium,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'It only writes to the one calendar you pick, and it never turns '
+            'your events into blocks without asking you first.',
             style: context.texts.bodyMedium,
           ),
           const SizedBox(height: 20),
@@ -249,8 +261,8 @@ class _IntroStep extends StatelessWidget {
             width: double.infinity,
             child: FilledButton.icon(
               onPressed: busy ? null : onConnect,
-              icon: const Icon(LucideIcons.link, size: 16),
-              label: Text(busy ? 'Signing in…' : 'Sign in with Google'),
+              icon: const Icon(LucideIcons.calendar, size: 16),
+              label: Text(busy ? 'Checking…' : 'Allow calendar access'),
             ),
           ),
           const SizedBox(height: 10),
@@ -286,8 +298,12 @@ class _CalendarStep extends StatelessWidget {
       children: <Widget>[
         Text('Which calendar?', style: context.texts.headlineMedium),
         const SizedBox(height: 4),
-        Text('Everything Tally writes goes here and nowhere else.',
-            style: context.texts.bodyMedium),
+        Text(
+          'Everything Tally writes goes here and nowhere else. Pick one that '
+          'belongs to your Google account and the events follow you to your '
+          'other devices.',
+          style: context.texts.bodyMedium,
+        ),
         const SizedBox(height: 16),
         OrganicCard(
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -304,18 +320,23 @@ class _CalendarStep extends StatelessWidget {
                   value: choice.id,
                   activeColor: c.accent700,
                   title: Text(choice.name, style: context.texts.titleSmall),
-                  subtitle: choice.primary
-                      ? Text('Your main calendar',
-                          style: context.texts.bodySmall)
-                      : null,
+                  subtitle: Text(
+                    choice.isLocal
+                        ? 'On this phone only — will not reach Google'
+                        : choice.accountName ?? 'Syncs with your account',
+                    style: context.texts.bodySmall,
+                  ),
                 ),
               ListTile(
                 onTap: busy ? null : onCreate,
                 leading: Icon(LucideIcons.plus, size: 18, color: c.accent700),
                 title: Text('Time tracked (new)',
                     style: context.texts.titleSmall),
-                subtitle: Text('Create a dedicated calendar',
-                    style: context.texts.bodySmall),
+                subtitle: Text(
+                  'A dedicated calendar — on this phone only, Android will not '
+                  'let an app add one to your Google account',
+                  style: context.texts.bodySmall,
+                ),
               ),
             ],
             ),
@@ -454,7 +475,7 @@ class _ConnectedStep extends ConsumerWidget {
                   const SizedBox(width: 10),
                   Text(
                     settings.needsReconnect
-                        ? 'Reconnect required'
+                        ? 'Calendar access needed'
                         : 'Syncing to ${settings.calendarName}',
                     style: context.texts.titleMedium?.copyWith(
                       color: settings.needsReconnect ? c.accent900 : c.sage800,
@@ -489,8 +510,8 @@ class _ConnectedStep extends ConsumerWidget {
                   Expanded(
                     child: Text(
                       account == null
-                          ? 'Signed out of Google — sign in again to sync.'
-                          : 'Signed in as $account',
+                          ? 'A calendar on this phone'
+                          : 'On your $account calendar',
                       style: context.texts.bodySmall?.copyWith(
                         color:
                             settings.needsReconnect ? c.accent800 : c.sage800,
@@ -560,8 +581,8 @@ class _ConnectedStep extends ConsumerWidget {
           width: double.infinity,
           child: OutlinedButton.icon(
             onPressed: busy ? null : onDisconnect,
-            icon: const Icon(LucideIcons.logOut, size: 16),
-            label: const Text('Disconnect'),
+            icon: const Icon(LucideIcons.unlink, size: 16),
+            label: const Text('Stop syncing'),
           ),
         ),
       ],

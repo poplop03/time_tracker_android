@@ -8,7 +8,7 @@ import '../data/db/database.dart';
 import '../data/prefs/settings_store.dart';
 import '../data/repositories/activity_repository.dart';
 import '../data/repositories/tracking_repository.dart';
-import '../features/sync/google_calendar_service.dart';
+import '../features/sync/device_calendar_service.dart';
 import '../features/sync/sync_engine.dart';
 
 const String kSyncTaskName = 'tally.pushBlocks';
@@ -28,16 +28,17 @@ void backgroundSyncDispatcher() {
       if (!settings.isConnected || settings.direction == SyncDirection.pull) {
         return true;
       }
-      final GoogleCalendarService calendar = GoogleCalendarService();
-      if (await calendar.restore() == null) {
+      final DeviceCalendarService calendar = DeviceCalendarService();
+      if (!await calendar.hasPermission()) {
+        // A background task cannot show a permission prompt; the Sync tab asks.
         await store.write(settings.copyWith(needsReconnect: true));
-        return true; // nothing retryable — the user has to reconnect.
+        return true;
       }
       final ActivityRepository activities = ActivityRepository(db);
       final SyncEngine engine =
           SyncEngine(TrackingRepository(db, activities), calendar);
       final SyncOutcome outcome = await engine.push(settings);
-      if (outcome.error == 'reconnect') {
+      if (outcome.error == 'permission') {
         await store.write(settings.copyWith(needsReconnect: true));
         return true;
       }

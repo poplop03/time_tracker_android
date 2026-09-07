@@ -8,7 +8,7 @@ import 'data/repositories/tracking_repository.dart';
 import 'domain/breakdown.dart';
 import 'domain/insights.dart';
 import 'domain/models.dart';
-import 'features/sync/google_calendar_service.dart';
+import 'features/sync/device_calendar_service.dart';
 import 'features/sync/sync_engine.dart';
 import 'services/timer_service.dart';
 
@@ -34,8 +34,8 @@ final Provider<TrackingRepository> trackingRepositoryProvider =
 final Provider<TimerService> timerServiceProvider =
     Provider<TimerService>((Ref ref) => TimerService());
 
-final Provider<GoogleCalendarService> calendarServiceProvider =
-    Provider<GoogleCalendarService>((Ref ref) => GoogleCalendarService());
+final Provider<DeviceCalendarService> calendarServiceProvider =
+    Provider<DeviceCalendarService>((Ref ref) => DeviceCalendarService());
 
 final Provider<SyncEngine> syncEngineProvider = Provider<SyncEngine>(
   (Ref ref) => SyncEngine(
@@ -60,8 +60,8 @@ class SettingsController extends Notifier<Settings> {
   Future<void> setCalendar(String id, String name) =>
       _save(state.copyWith(calendarId: id, calendarName: name, needsReconnect: false));
 
-  /// Remembers which Google account is signed in, so the Sync tab can name it
-  /// after a restart rather than only in the session that connected.
+  /// Remembers which account the chosen calendar belongs to, so the Sync tab
+  /// can name it after a restart.
   Future<void> setAccount(String? email) =>
       _save(Settings(
         use24h: state.use24h,

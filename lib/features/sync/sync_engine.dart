@@ -1,9 +1,7 @@
-import 'package:googleapis/calendar/v3.dart' as gcal;
-
 import '../../data/prefs/settings_store.dart';
 import '../../data/repositories/tracking_repository.dart';
 import '../../domain/models.dart';
-import 'google_calendar_service.dart';
+import 'device_calendar_service.dart';
 
 /// Blocks shorter than this are skipped when "only sync blocks over 15
 /// minutes" is on.
@@ -15,7 +13,7 @@ class SyncEngine {
   SyncEngine(this._blocks, this._calendar);
 
   final TrackingRepository _blocks;
-  final GoogleCalendarService _calendar;
+  final DeviceCalendarService _calendar;
 
   Future<SyncOutcome> push(Settings settings) async {
     final String? calendarId = settings.calendarId;
@@ -45,24 +43,14 @@ class SyncEngine {
         );
         await _blocks.markSynced(block.id, eventId);
         pushed++;
-      } on CalendarAuthExpired {
+      } on CalendarPermissionDenied {
+        // Nothing else will succeed until the permission is granted, so stop.
         return SyncOutcome(
           pushed: pushed,
           skipped: skipped,
           failed: dirty.length - pushed - skipped,
-          error: 'reconnect',
+          error: 'permission',
         );
-      } on gcal.DetailedApiRequestError catch (e) {
-        if (e.status == 401 || e.status == 403) {
-          return SyncOutcome(
-            pushed: pushed,
-            skipped: skipped,
-            failed: dirty.length - pushed - skipped,
-            error: 'reconnect',
-          );
-        }
-        failed++;
-        error = e.message ?? 'Calendar rejected an event (${e.status}).';
       } on Exception catch (e) {
         failed++;
         error = e.toString();
