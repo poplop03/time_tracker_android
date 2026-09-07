@@ -5,9 +5,11 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/theme/organic_theme.dart';
 import '../../core/time/formatting.dart';
 import '../../data/prefs/settings_store.dart';
+import '../../domain/models.dart';
 import '../../providers.dart';
 import '../../services/background_sync.dart';
 import '../shell/widgets.dart';
+import 'csv_export.dart';
 import 'google_calendar_service.dart';
 
 /// Four steps: intro, pick a calendar, choose a direction, then the connected
@@ -246,6 +248,8 @@ class _IntroStep extends StatelessWidget {
               label: Text(busy ? 'Connecting…' : 'Connect Google Calendar'),
             ),
           ),
+          const SizedBox(height: 10),
+          const ExportCsvButton(),
         ],
       ),
     );
@@ -527,6 +531,8 @@ class _ConnectedStep extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 10),
+        const ExportCsvButton(),
+        const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
@@ -536,6 +542,54 @@ class _ConnectedStep extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Available whether or not a calendar is connected — the data is the user's.
+class ExportCsvButton extends ConsumerStatefulWidget {
+  const ExportCsvButton({super.key});
+
+  @override
+  ConsumerState<ExportCsvButton> createState() => _ExportCsvButtonState();
+}
+
+class _ExportCsvButtonState extends ConsumerState<ExportCsvButton> {
+  bool _busy = false;
+
+  Future<void> _export() async {
+    setState(() => _busy = true);
+    try {
+      final List<TrackedBlock> blocks =
+          await ref.read(trackingRepositoryProvider).allBlocks();
+      if (blocks.every((TrackedBlock b) => b.endedAt == null)) {
+        if (mounted) _toast('Nothing finished to export yet.');
+        return;
+      }
+      final int rows = await const CsvExport().share(blocks);
+      if (mounted) _toast('Exported $rows block${rows == 1 ? '' : 's'}.');
+    } on Exception catch (e) {
+      if (mounted) _toast('Export failed: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _busy ? null : _export,
+        icon: const Icon(LucideIcons.arrowDown, size: 16),
+        label: Text(_busy ? 'Exporting…' : 'Export everything as CSV'),
+      ),
     );
   }
 }

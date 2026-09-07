@@ -44,7 +44,7 @@ class _NamesScreenState extends ConsumerState<NamesScreen> {
         return a.toLowerCase().compareTo(b.toLowerCase());
       });
 
-    return ScreenScaffold(
+    final Widget list = ScreenScaffold(
       title: 'Names',
       kicker: '${activities.length} activit'
           '${activities.length == 1 ? 'y' : 'ies'}',
@@ -125,25 +125,28 @@ class _NamesScreenState extends ConsumerState<NamesScreen> {
           child: SizedBox(height: _selectMode && _selected.isNotEmpty ? 90 : 0),
         ),
       ],
-    ).let((Widget scroll) => Stack(
-          children: <Widget>[
-            scroll,
-            if (_selectMode && _selected.isNotEmpty)
-              Positioned(
-                left: 20,
-                right: 20,
-                bottom: 20,
-                child: FilledButton(
-                  onPressed: _openGroupSheet,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 52),
-                  ),
-                  child: Text('Group ${_selected.length} name'
-                      '${_selected.length == 1 ? '' : 's'}'),
-                ),
+    );
+
+    // The group action floats over the list while names are being picked.
+    return Stack(
+      children: <Widget>[
+        list,
+        if (_selectMode && _selected.isNotEmpty)
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 20,
+            child: FilledButton(
+              onPressed: _openGroupSheet,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 52),
               ),
-          ],
-        ));
+              child: Text('Group ${_selected.length} name'
+                  '${_selected.length == 1 ? '' : 's'}'),
+            ),
+          ),
+      ],
+    );
   }
 
   Future<void> _addActivity() async {
@@ -173,10 +176,6 @@ class _NamesScreenState extends ConsumerState<NamesScreen> {
       _selected.clear();
     });
   }
-}
-
-extension _Let on Widget {
-  Widget let(Widget Function(Widget) f) => f(this);
 }
 
 class _AddActivityField extends StatelessWidget {

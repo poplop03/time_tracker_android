@@ -104,7 +104,10 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
                       selected: _index == i,
                       label: _tabs[i].label,
                       child: InkWell(
-                        onTap: () => setState(() => _index = i),
+                        onTap: () {
+                          setState(() => _index = i);
+                          ref.read(selectedTabProvider.notifier).select(i);
+                        },
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: <Widget>[

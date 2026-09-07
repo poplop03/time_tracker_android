@@ -96,8 +96,9 @@ final StreamProvider<TrackedBlock?> runningBlockProvider =
         (Ref ref) => ref.watch(trackingRepositoryProvider).watchRunning());
 
 final StreamProvider<List<TrackedBlock>> todayBlocksProvider =
-    StreamProvider<List<TrackedBlock>>(
-        (Ref ref) => ref.watch(trackingRepositoryProvider).watchDay(DateTime.now()));
+    StreamProvider<List<TrackedBlock>>((Ref ref) => ref
+        .watch(trackingRepositoryProvider)
+        .watchDay(ref.watch(currentDayProvider)));
 
 final StreamProvider<List<ActivitySummary>> activitiesProvider =
     StreamProvider<List<ActivitySummary>>(
@@ -109,14 +110,34 @@ final StreamProvider<List<String>> groupsProvider = StreamProvider<List<String>>
 final StreamProvider<int> pendingSyncCountProvider = StreamProvider<int>(
     (Ref ref) => ref.watch(trackingRepositoryProvider).watchPendingCount());
 
-/// A one-second heartbeat, used only where a live readout is on screen.
+/// Which bottom-nav tab is on screen. Only Today needs a live clock, so the
+/// ticker below watches this rather than running all day.
+class SelectedTab extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void select(int index) => state = index;
+}
+
+final NotifierProvider<SelectedTab, int> selectedTabProvider =
+    NotifierProvider<SelectedTab, int>(SelectedTab.new);
+
+/// A one-second heartbeat, alive only while the Today tab is visible. The tick
+/// never mutates a stored duration — it just re-renders derived readouts.
 final StreamProvider<DateTime> tickerProvider = StreamProvider<DateTime>(
   (Ref ref) async* {
     yield DateTime.now();
+    if (ref.watch(selectedTabProvider) != 0) return;
     yield* Stream<DateTime>.periodic(
         const Duration(seconds: 1), (_) => DateTime.now());
   },
 );
+
+/// The local day Today is showing. Derived from the ticker so the screen rolls
+/// over at midnight instead of pinning the day the app was opened.
+final Provider<DateTime> currentDayProvider = Provider<DateTime>((Ref ref) {
+  return startOfDay(ref.watch(tickerProvider).value ?? DateTime.now());
+});
 
 /// The last 7 local days of blocks, for the Stats bars and donut.
 final StreamProvider<List<TrackedBlock>> weekBlocksProvider =
