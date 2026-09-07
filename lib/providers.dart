@@ -60,6 +60,23 @@ class SettingsController extends Notifier<Settings> {
   Future<void> setCalendar(String id, String name) =>
       _save(state.copyWith(calendarId: id, calendarName: name, needsReconnect: false));
 
+  /// Remembers which Google account is signed in, so the Sync tab can name it
+  /// after a restart rather than only in the session that connected.
+  Future<void> setAccount(String? email) =>
+      _save(Settings(
+        use24h: state.use24h,
+        calendarId: state.calendarId,
+        calendarName: state.calendarName,
+        accountEmail: email,
+        direction: state.direction,
+        onlyLongBlocks: state.onlyLongBlocks,
+        includeActivityName: state.includeActivityName,
+        lastSyncAt: state.lastSyncAt,
+        needsReconnect: state.needsReconnect,
+        runningStartedAtMs: state.runningStartedAtMs,
+        runningActivity: state.runningActivity,
+      ));
+
   Future<void> setDirection(SyncDirection d) =>
       _save(state.copyWith(direction: d));
 

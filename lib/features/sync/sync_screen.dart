@@ -83,7 +83,7 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                 ),
               _ => _ConnectedStep(
                   settings: settings,
-                  account: _account,
+                  account: _account ?? settings.accountEmail,
                   pending: pending,
                   busy: _busy,
                   lastResult: _lastResult,
@@ -118,7 +118,10 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
   Future<void> _connect() => _guard(() async {
         final GoogleCalendarService service =
             ref.read(calendarServiceProvider);
+        // Signing in is the whole point of this step: without a Google account
+        // there is nothing to sync to.
         _account = await service.connect();
+        await ref.read(settingsProvider.notifier).setAccount(_account);
         _calendars = await service.listCalendars();
         if (!mounted) return;
         setState(() => _step = 1);
@@ -176,6 +179,7 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
   Future<void> _disconnect() => _guard(() async {
         await BackgroundSync.cancel();
         await ref.read(calendarServiceProvider).disconnect();
+        await ref.read(settingsProvider.notifier).setAccount(null);
         await ref.read(settingsProvider.notifier).disconnect();
         if (!mounted) return;
         setState(() {
@@ -234,8 +238,9 @@ class _IntroStep extends StatelessWidget {
               style: context.texts.headlineMedium),
           const SizedBox(height: 8),
           Text(
-            'Tally writes each finished block as an event on one calendar you '
-            'choose. It never touches your other calendars, and it never '
+            'Sign in with the Google account whose calendar you want to use. '
+            'Tally then writes each finished block as an event on one calendar '
+            'you choose — it never touches your other calendars, and it never '
             'creates blocks from your calendar without asking you first.',
             style: context.texts.bodyMedium,
           ),
@@ -245,7 +250,7 @@ class _IntroStep extends StatelessWidget {
             child: FilledButton.icon(
               onPressed: busy ? null : onConnect,
               icon: const Icon(LucideIcons.link, size: 16),
-              label: Text(busy ? 'Connecting…' : 'Connect Google Calendar'),
+              label: Text(busy ? 'Signing in…' : 'Sign in with Google'),
             ),
           ),
           const SizedBox(height: 10),
@@ -472,10 +477,28 @@ class _ConnectedStep extends ConsumerWidget {
                   color: settings.needsReconnect ? c.accent800 : c.sage800,
                 ),
               ),
-              if (account != null) ...<Widget>[
-                const SizedBox(height: 6),
-                Text(account!, style: context.texts.bodySmall),
-              ],
+              const SizedBox(height: 10),
+              Row(
+                children: <Widget>[
+                  Icon(
+                    account == null ? LucideIcons.userX : LucideIcons.user,
+                    size: 15,
+                    color: settings.needsReconnect ? c.accent800 : c.sage800,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      account == null
+                          ? 'Signed out of Google — sign in again to sync.'
+                          : 'Signed in as $account',
+                      style: context.texts.bodySmall?.copyWith(
+                        color:
+                            settings.needsReconnect ? c.accent800 : c.sage800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

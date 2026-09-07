@@ -70,19 +70,24 @@ class GoogleCalendarService {
     _initialised = true;
   }
 
-  /// Silent re-auth on app start / background runs.
-  Future<bool> restore() async {
-    if (!isConfigured) return false;
+  /// Silent re-auth on app start and on background runs. Returns the signed-in
+  /// address, or null when the user has to sign in again.
+  Future<String?> restore() async {
+    if (!isConfigured) return null;
     try {
       await _ensureInitialised();
       _account = await GoogleSignIn.instance.attemptLightweightAuthentication();
-      return _account != null;
+      return _account?.email;
     } on Exception {
-      return false;
+      return null;
     }
   }
 
-  /// Interactive connect, used by the Sync tab's step 0.
+  /// Interactive connect, used by the Sync tab's step 0. Always puts the Google
+  /// account picker in front of the user — signing in is what makes syncing
+  /// possible, so it is never skipped — and then asks for calendar consent.
+  /// Throws if the user backs out of either step, so a half-finished sign-in
+  /// never reads as connected.
   Future<String> connect() async {
     await _ensureInitialised();
     if (!GoogleSignIn.instance.supportsAuthenticate()) {
@@ -91,14 +96,27 @@ class GoogleCalendarService {
     final GoogleSignInAccount account =
         await GoogleSignIn.instance.authenticate(scopeHint: kCalendarScopes);
     _account = account;
-    await account.authorizationClient.authorizeScopes(kCalendarScopes);
+
+    // Consent to the calendar scopes, without which every API call would fail.
+    final GoogleSignInClientAuthorization authorization =
+        await account.authorizationClient.authorizeScopes(kCalendarScopes);
+    // Touching the token here surfaces a refused grant now rather than at the
+    // first sync.
+    authorization.authClient(scopes: kCalendarScopes).close();
     return account.email;
   }
 
+  /// Whether a Google session is still available without prompting.
+  Future<bool> get isSignedIn async =>
+      _account != null || (await restore()) != null;
+
+  /// Signs out and revokes the grant, so the next connect starts from the
+  /// account picker again.
   Future<void> disconnect() async {
     _account = null;
     if (!_initialised) return;
     await GoogleSignIn.instance.disconnect();
+    await GoogleSignIn.instance.signOut();
   }
 
   String? get accountEmail => _account?.email;

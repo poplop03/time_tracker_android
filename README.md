@@ -75,7 +75,7 @@ Requires Flutter stable (3.47+) and the Android SDK.
 ```bash
 flutter pub get
 dart run build_runner build      # drift database code
-flutter test                     # 59 tests, including one golden per screen
+flutter test                     # 63 tests, including one golden per screen
 flutter build apk --release --split-per-abi
 ```
 

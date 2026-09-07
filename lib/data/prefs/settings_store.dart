@@ -10,6 +10,7 @@ class Settings {
     this.use24h = false,
     this.calendarId,
     this.calendarName,
+    this.accountEmail,
     this.direction = SyncDirection.push,
     this.onlyLongBlocks = true,
     this.includeActivityName = true,
@@ -22,6 +23,10 @@ class Settings {
   final bool use24h;
   final String? calendarId;
   final String? calendarName;
+
+  /// The Google account the user signed in with. Kept so the Sync tab can say
+  /// who is connected after a restart, not just in the session that signed in.
+  final String? accountEmail;
   final SyncDirection direction;
   final bool onlyLongBlocks;
   final bool includeActivityName;
@@ -39,6 +44,7 @@ class Settings {
     bool? use24h,
     String? calendarId,
     String? calendarName,
+    String? accountEmail,
     SyncDirection? direction,
     bool? onlyLongBlocks,
     bool? includeActivityName,
@@ -53,6 +59,7 @@ class Settings {
       use24h: use24h ?? this.use24h,
       calendarId: clearCalendar ? null : (calendarId ?? this.calendarId),
       calendarName: clearCalendar ? null : (calendarName ?? this.calendarName),
+      accountEmail: clearCalendar ? null : (accountEmail ?? this.accountEmail),
       direction: direction ?? this.direction,
       onlyLongBlocks: onlyLongBlocks ?? this.onlyLongBlocks,
       includeActivityName: includeActivityName ?? this.includeActivityName,
@@ -74,6 +81,7 @@ class SettingsStore {
   static const String _kUse24h = 'use24h';
   static const String _kCalendarId = 'calendarId';
   static const String _kCalendarName = 'calendarName';
+  static const String _kAccountEmail = 'accountEmail';
   static const String _kDirection = 'syncDirection';
   static const String _kOnlyLong = 'onlyLongBlocks';
   static const String _kIncludeName = 'includeActivityName';
@@ -91,6 +99,7 @@ class SettingsStore {
       use24h: _prefs.getBool(_kUse24h) ?? false,
       calendarId: _prefs.getString(_kCalendarId),
       calendarName: _prefs.getString(_kCalendarName),
+      accountEmail: _prefs.getString(_kAccountEmail),
       direction: SyncDirection.values[
           (_prefs.getInt(_kDirection) ?? 0).clamp(0, SyncDirection.values.length - 1)],
       onlyLongBlocks: _prefs.getBool(_kOnlyLong) ?? true,
@@ -109,6 +118,11 @@ class SettingsStore {
     await _prefs.setBool(_kOnlyLong, s.onlyLongBlocks);
     await _prefs.setBool(_kIncludeName, s.includeActivityName);
     await _prefs.setBool(_kNeedsReconnect, s.needsReconnect);
+    if (s.accountEmail == null) {
+      await _prefs.remove(_kAccountEmail);
+    } else {
+      await _prefs.setString(_kAccountEmail, s.accountEmail!);
+    }
     if (s.calendarId == null) {
       await _prefs.remove(_kCalendarId);
       await _prefs.remove(_kCalendarName);

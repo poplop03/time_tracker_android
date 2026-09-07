@@ -41,7 +41,7 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
       ref.read(timerServiceProvider).init();
       await ref.read(timerServiceProvider).requestPermissions();
       await actions.reconcile();
-      await ref.read(calendarServiceProvider).restore();
+      await _restoreGoogleSession();
     });
   }
 
@@ -58,6 +58,19 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
     if (state == AppLifecycleState.resumed) {
       ref.read(trackingActionsProvider).reconcile();
       ref.read(settingsProvider.notifier).reload();
+    }
+  }
+
+  /// A connected calendar is only useful while the Google session survives.
+  /// Restore it quietly on start, and say so on the Sync tab when it has gone.
+  Future<void> _restoreGoogleSession() async {
+    if (!ref.read(settingsProvider).isConnected) return;
+    final String? email = await ref.read(calendarServiceProvider).restore();
+    if (!mounted) return;
+    if (email == null) {
+      await ref.read(settingsProvider.notifier).markNeedsReconnect();
+    } else {
+      await ref.read(settingsProvider.notifier).setAccount(email);
     }
   }
 

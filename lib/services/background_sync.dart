@@ -29,7 +29,7 @@ void backgroundSyncDispatcher() {
         return true;
       }
       final GoogleCalendarService calendar = GoogleCalendarService();
-      if (!await calendar.restore()) {
+      if (await calendar.restore() == null) {
         await store.write(settings.copyWith(needsReconnect: true));
         return true; // nothing retryable — the user has to reconnect.
       }
