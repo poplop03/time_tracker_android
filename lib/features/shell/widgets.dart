@@ -19,14 +19,21 @@ class OrganicCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: color ?? context.colors.surface,
-        borderRadius: OrganicRadii.card,
-        border: border,
+    // A Material rather than a plain DecoratedBox: list tiles and switches
+    // paint their ink on the nearest Material ancestor, so a bare coloured box
+    // would swallow every ripple inside the card.
+    return Material(
+      color: color ?? context.colors.surface,
+      borderRadius: OrganicRadii.card,
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: OrganicRadii.card,
+          border: border,
+        ),
+        padding: padding,
+        child: child,
       ),
-      padding: padding,
-      child: child,
     );
   }
 }

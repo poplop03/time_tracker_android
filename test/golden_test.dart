@@ -88,8 +88,12 @@ final InsightSet _insights = InsightSet(
   daysWithData: 21,
 );
 
-Future<Widget> _host(Widget child, {List<Override> extra = const <Override>[]}) async {
-  SharedPreferences.setMockInitialValues(<String, Object>{});
+Future<Widget> _host(
+  Widget child, {
+  List<Override> extra = const <Override>[],
+  Map<String, Object> prefs = const <String, Object>{},
+}) async {
+  SharedPreferences.setMockInitialValues(prefs);
   final SettingsStore store = await SettingsStore.open();
   return ProviderScope(
     overrides: <Override>[
@@ -121,11 +125,15 @@ Future<Widget> _host(Widget child, {List<Override> extra = const <Override>[]}) 
   );
 }
 
-Future<void> _pumpScreen(WidgetTester tester, Widget screen) async {
+Future<void> _pumpScreen(
+  WidgetTester tester,
+  Widget screen, {
+  Map<String, Object> prefs = const <String, Object>{},
+}) async {
   tester.view.physicalSize = const Size(1080, 2160);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(await _host(screen));
+  await tester.pumpWidget(await _host(screen, prefs: prefs));
   await tester.pump(const Duration(milliseconds: 50));
 }
 
@@ -177,5 +185,18 @@ void main() {
     await _pumpScreen(tester, const SyncScreen());
     await expectLater(find.byType(SyncScreen),
         matchesGoldenFile('goldens/sync.png'));
+  });
+
+  testWidgets('Sync, connected', (WidgetTester tester) async {
+    await _pumpScreen(tester, const SyncScreen(), prefs: <String, Object>{
+      'calendarId': 'cal-1',
+      'calendarName': 'Time tracked',
+      'accountEmail': 'you@example.com',
+      'lastSyncAt': _now.millisecondsSinceEpoch,
+    });
+    // The connected card is reached via a post-frame callback.
+    await tester.pump(const Duration(milliseconds: 50));
+    await expectLater(find.byType(SyncScreen),
+        matchesGoldenFile('goldens/sync_connected.png'));
   });
 }
