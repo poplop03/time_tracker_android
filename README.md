@@ -41,32 +41,27 @@ the running timer alive and visible.
   of waking hours, and which hours you actually work in.
 - **Names** — every activity you have named, sectioned by group, with a select
   mode for regrouping several at once.
-- **Sync** — four steps to put finished blocks on one Google Calendar you pick.
+- **Sync** — four steps to put finished blocks on one calendar you pick, plus
+  CSV export.
 
-## Calendar sync needs your own Google client id
+## Calendar sync
 
-Google ties OAuth to the signing certificate of the app, so a published build
-cannot ship working credentials for someone else's Google account. Sync in the
-release APK will tell you it is not configured; everything else works.
+Sync needs no setup and no accounts of its own. Tally writes to a calendar
+that is already on the phone, through Android's calendar provider — and
+whichever Google account is signed in on the device syncs those events onwards
+by itself. The only thing the app asks for is the calendar permission.
 
-To enable it for yourself:
+That means there is no OAuth client to register, nothing to configure per
+install, and sync works in a plain sideloaded APK.
 
-1. In the [Google Cloud console](https://console.cloud.google.com), create a
-   project and enable the **Google Calendar API**.
-2. Create an **OAuth client id** of type *Android*, with package name
-   `com.tally.tally` and the SHA-1 of the key you sign with
-   (`keytool -list -v -keystore <your.jks> -alias tally`).
-3. Create a second client id of type **Web application** — its id is what the
-   Android sign-in flow needs.
-4. Build with it:
+Two things worth knowing:
 
-   ```bash
-   flutter build apk --release \
-     --dart-define=GOOGLE_SERVER_CLIENT_ID=<your web client id>
-   ```
-
-Tally only ever writes to the one calendar you choose, and pulled events are
-offered as suggestions you confirm — it never creates blocks silently.
+- Android does not let an app add a calendar to a Google account. The
+  "Time tracked (new)" option therefore creates a **device-only** calendar,
+  and the app says so. To get a dedicated calendar that syncs, make one in
+  Google Calendar and pick it here.
+- Tally only ever writes to the one calendar you choose, and pulled events are
+  offered as suggestions you confirm — it never creates blocks silently.
 
 ## Building from source
 

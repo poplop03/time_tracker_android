@@ -123,12 +123,8 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
         // signed in on the phone is what makes these calendars sync.
         _calendars = await service.listCalendars();
         if (!mounted) return;
-        if (_calendars!.isEmpty) {
-          setState(() => _error =
-              'No writable calendars on this phone. Add a Google account in '
-              'Android Settings, then come back.');
-          return;
-        }
+        // An empty list is not a dead end: the user can still make a
+        // device-only calendar on the next step.
         setState(() => _step = 1);
       });
 
@@ -299,9 +295,13 @@ class _CalendarStep extends StatelessWidget {
         Text('Which calendar?', style: context.texts.headlineMedium),
         const SizedBox(height: 4),
         Text(
-          'Everything Tally writes goes here and nowhere else. Pick one that '
-          'belongs to your Google account and the events follow you to your '
-          'other devices.',
+          calendars.isEmpty
+              ? 'This phone has no calendar Tally can write to. Add a Google '
+                  'account in Android Settings to use your own calendar, or '
+                  'make a device-only one below.'
+              : 'Everything Tally writes goes here and nowhere else. Pick one '
+                  'that belongs to your Google account and the events follow '
+                  'you to your other devices.',
           style: context.texts.bodyMedium,
         ),
         const SizedBox(height: 16),
