@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show StreamProviderFamily;
 
 import 'core/time/day.dart';
 import 'data/db/database.dart';
@@ -175,6 +176,22 @@ final StreamProvider<List<TrackedBlock>> insightWindowProvider =
       .watch(trackingRepositoryProvider)
       .watchRange(from, endOfDay(now));
 });
+
+/// The current time, as a provider so sheets that label days ("Today",
+/// "Yesterday") and refuse future end times can be pinned in tests.
+final Provider<DateTime Function()> clockProvider =
+    Provider<DateTime Function()>((Ref ref) => DateTime.now);
+
+/// One activity's blocks, newest first, for the sheet opened by holding a name.
+/// The argument is (activityId, limit): showing earlier blocks widens the
+/// window, and auto-dispose drops the narrower windows left behind.
+final StreamProviderFamily<List<TrackedBlock>, (int, int)>
+    activityBlocksProvider =
+    StreamProvider.autoDispose.family<List<TrackedBlock>, (int, int)>(
+  (Ref ref, (int, int) arg) => ref
+      .watch(trackingRepositoryProvider)
+      .watchActivityBlocks(arg.$1, limit: arg.$2),
+);
 
 // ---- derived ----------------------------------------------------------------
 

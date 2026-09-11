@@ -196,12 +196,9 @@ class _RunningCard extends StatelessWidget {
             style: context.texts.headlineMedium?.copyWith(color: c.accent900),
           ),
           const SizedBox(height: 6),
-          Text(
+          SteadyDigits(
             formatStopwatch(block.durationAt(now)),
-            style: context.texts.displayLarge?.copyWith(
-              color: c.accent900,
-              fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-            ),
+            style: context.texts.displayLarge!.copyWith(color: c.accent900),
           ),
           const SizedBox(height: 2),
           Text(
@@ -388,6 +385,15 @@ class _EntryRow extends StatelessWidget {
                   '${formatSpan(block.startedAt, block.endedAt, use24h)}',
                   style: context.texts.bodySmall,
                 ),
+                if (block.note != null) ...<Widget>[
+                  const SizedBox(height: 6),
+                  Text(
+                    block.note!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.texts.bodyMedium,
+                  ),
+                ],
               ],
             ),
           ),

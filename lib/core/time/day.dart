@@ -32,3 +32,31 @@ const List<String> _weekdays = <String>[
 /// "Monday, 7 September" — the Today header kicker.
 String formatDateKicker(DateTime d) =>
     '${_weekdays[d.weekday - 1]}, ${d.day} ${_months[d.month - 1]}';
+
+const List<String> _shortWeekdays = <String>[
+  'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
+];
+
+const List<String> _shortMonths = <String>[
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// "Mon 7 Sep", with the year added only when it is not [now]'s year.
+String formatShortDate(DateTime d, DateTime now) {
+  final String base =
+      '${_shortWeekdays[d.weekday - 1]} ${d.day} ${_shortMonths[d.month - 1]}';
+  return d.year == now.year ? base : '$base ${d.year}';
+}
+
+/// "Today", "Yesterday", or the full date — for lists of past blocks.
+/// Yesterday is found by calendar day, not by subtracting 24 hours, which
+/// would skip a day across a daylight-saving change.
+String formatDayLabel(DateTime d, DateTime now) {
+  if (isSameDay(d, now)) return 'Today';
+  if (isSameDay(d, DateTime(now.year, now.month, now.day - 1))) {
+    return 'Yesterday';
+  }
+  final String full = formatDateKicker(d);
+  return d.year == now.year ? full : '$full ${d.year}';
+}

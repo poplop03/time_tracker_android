@@ -109,21 +109,37 @@ const double kMinTapTarget = 44;
 ThemeData buildOrganicTheme() {
   const OrganicColors c = OrganicColors.standard;
 
-  final TextTheme body = GoogleFonts.figtreeTextTheme();
-  final TextTheme text = body
+  // Comfortaa throughout: bold for headings, heavier-than-regular body weights
+  // because its hairline strokes thin out at small sizes on cream.
+  TextStyle comfortaa(
+    double size, {
+    FontWeight weight = FontWeight.w500,
+    double? height,
+    double? spacing,
+    Color? color,
+  }) =>
+      GoogleFonts.comfortaa(
+        fontSize: size,
+        fontWeight: weight,
+        height: height,
+        letterSpacing: spacing,
+        color: color ?? c.text,
+      );
+
+  final TextTheme text = GoogleFonts.comfortaaTextTheme()
       .apply(bodyColor: c.text, displayColor: c.text)
       .copyWith(
-        displayLarge: GoogleFonts.caprasimo(fontSize: 40, height: 1.1, color: c.text),
-        displayMedium: GoogleFonts.caprasimo(fontSize: 32, height: 1.15, color: c.text),
-        displaySmall: GoogleFonts.caprasimo(fontSize: 26, height: 1.2, color: c.text),
-        headlineMedium: GoogleFonts.caprasimo(fontSize: 22, height: 1.2, color: c.text),
-        headlineSmall: GoogleFonts.caprasimo(fontSize: 18, height: 1.25, color: c.text),
-        titleMedium: GoogleFonts.figtree(fontSize: 16, fontWeight: FontWeight.w700, color: c.text),
-        titleSmall: GoogleFonts.figtree(fontSize: 14, fontWeight: FontWeight.w600, color: c.text),
-        bodyLarge: GoogleFonts.figtree(fontSize: 16, color: c.text),
-        bodyMedium: GoogleFonts.figtree(fontSize: 14, color: c.neutral700),
-        bodySmall: GoogleFonts.figtree(fontSize: 12, fontWeight: FontWeight.w600, color: c.neutral700),
-        labelLarge: GoogleFonts.figtree(fontSize: 15, fontWeight: FontWeight.w700, color: c.text),
+        displayLarge: comfortaa(38, weight: FontWeight.w700, height: 1.1, spacing: -0.8),
+        displayMedium: comfortaa(30, weight: FontWeight.w700, height: 1.15, spacing: -0.6),
+        displaySmall: comfortaa(25, weight: FontWeight.w700, height: 1.2, spacing: -0.4),
+        headlineMedium: comfortaa(21, weight: FontWeight.w700, height: 1.25, spacing: -0.3),
+        headlineSmall: comfortaa(17, weight: FontWeight.w700, height: 1.3, spacing: -0.2),
+        titleMedium: comfortaa(15, weight: FontWeight.w700),
+        titleSmall: comfortaa(14, weight: FontWeight.w700),
+        bodyLarge: comfortaa(15, height: 1.45),
+        bodyMedium: comfortaa(14, height: 1.45, color: c.neutral700),
+        bodySmall: comfortaa(12, weight: FontWeight.w600, height: 1.4, color: c.neutral700),
+        labelLarge: comfortaa(15, weight: FontWeight.w700),
       );
 
   final ColorScheme scheme = ColorScheme.fromSeed(
@@ -194,7 +210,7 @@ ThemeData buildOrganicTheme() {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: c.neutral200,
-      hintStyle: GoogleFonts.figtree(fontSize: 16, color: c.neutral600),
+      hintStyle: GoogleFonts.comfortaa(fontSize: 15, fontWeight: FontWeight.w500, color: c.neutral600),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       border: const OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(999)),
@@ -226,7 +242,7 @@ ThemeData buildOrganicTheme() {
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: c.text,
-      contentTextStyle: GoogleFonts.figtree(fontSize: 14, color: c.bg),
+      contentTextStyle: GoogleFonts.comfortaa(fontSize: 14, fontWeight: FontWeight.w600, color: c.bg),
       behavior: SnackBarBehavior.floating,
       shape: const RoundedRectangleBorder(borderRadius: OrganicRadii.row),
     ),

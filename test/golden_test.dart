@@ -11,6 +11,7 @@ import 'package:tally/core/time/day.dart';
 import 'package:tally/data/prefs/settings_store.dart';
 import 'package:tally/domain/models.dart';
 import 'package:tally/features/insights/insights_screen.dart';
+import 'package:tally/features/names/block_editor.dart';
 import 'package:tally/features/names/names_screen.dart';
 import 'package:tally/features/stats/stats_screen.dart';
 import 'package:tally/features/sync/sync_screen.dart';
@@ -88,10 +89,47 @@ final InsightSet _insights = InsightSet(
   daysWithData: 21,
 );
 
+/// Sheets label days relative to the clock, so they get an absolute date and a
+/// pinned clock of their own — otherwise the goldens would change every day.
+final DateTime _sheetNow = DateTime(2026, 9, 11, 18);
+
+final List<TrackedBlock> _sheetBlocks = <TrackedBlock>[
+  TrackedBlock(
+    id: 21,
+    activityId: 1,
+    activityName: 'Deep work',
+    groupName: 'Work',
+    colorSeed: 1,
+    startedAt: DateTime(2026, 9, 11, 9, 5),
+    endedAt: DateTime(2026, 9, 11, 10, 45),
+    note: 'Outlined the sync chapter and rewrote the permission copy.',
+  ),
+  TrackedBlock(
+    id: 22,
+    activityId: 1,
+    activityName: 'Deep work',
+    groupName: 'Work',
+    colorSeed: 1,
+    startedAt: DateTime(2026, 9, 10, 14),
+    endedAt: DateTime(2026, 9, 10, 15, 30),
+  ),
+  TrackedBlock(
+    id: 23,
+    activityId: 1,
+    activityName: 'Deep work',
+    groupName: 'Work',
+    colorSeed: 1,
+    startedAt: DateTime(2026, 9, 7, 8, 30),
+    endedAt: DateTime(2026, 9, 7, 11),
+    note: 'Code review backlog',
+  ),
+];
+
 Future<Widget> _host(
   Widget child, {
   List<Override> extra = const <Override>[],
   Map<String, Object> prefs = const <String, Object>{},
+  DateTime Function()? clock,
 }) async {
   SharedPreferences.setMockInitialValues(prefs);
   final SettingsStore store = await SettingsStore.open();
@@ -115,6 +153,9 @@ Future<Widget> _host(
       weekTotalsProvider.overrideWithValue(_weekTotals()),
       weekBreakdownProvider.overrideWithValue(_slices),
       insightsProvider.overrideWithValue(_insights),
+      clockProvider.overrideWithValue(clock ?? () => _now),
+      activityBlocksProvider.overrideWith((Ref ref, (int, int) arg) =>
+          Stream<List<TrackedBlock>>.value(_sheetBlocks)),
       ...extra,
     ],
     child: MaterialApp(
@@ -129,11 +170,12 @@ Future<void> _pumpScreen(
   WidgetTester tester,
   Widget screen, {
   Map<String, Object> prefs = const <String, Object>{},
+  DateTime Function()? clock,
 }) async {
   tester.view.physicalSize = const Size(1080, 2160);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(await _host(screen, prefs: prefs));
+  await tester.pumpWidget(await _host(screen, prefs: prefs, clock: clock));
   await tester.pump(const Duration(milliseconds: 50));
 }
 
@@ -179,6 +221,27 @@ void main() {
     await _pumpScreen(tester, const NamesScreen());
     await expectLater(find.byType(NamesScreen),
         matchesGoldenFile('goldens/names.png'));
+  });
+
+  testWidgets('Names, blocks sheet', (WidgetTester tester) async {
+    await _pumpScreen(
+      tester,
+      ActivityBlocksSheet(activity: _activities.first),
+      clock: () => _sheetNow,
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+    await expectLater(find.byType(ActivityBlocksSheet),
+        matchesGoldenFile('goldens/names_blocks.png'));
+  });
+
+  testWidgets('Names, edit block', (WidgetTester tester) async {
+    await _pumpScreen(
+      tester,
+      BlockEditSheet(block: _sheetBlocks.first),
+      clock: () => _sheetNow,
+    );
+    await expectLater(find.byType(BlockEditSheet),
+        matchesGoldenFile('goldens/names_edit.png'));
   });
 
   testWidgets('Sync', (WidgetTester tester) async {

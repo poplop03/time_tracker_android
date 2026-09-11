@@ -160,7 +160,7 @@ class ShareBar extends StatelessWidget {
   }
 }
 
-/// Screen scaffold with the Caprasimo title and a consistent gutter.
+/// Screen scaffold with the display title and a consistent gutter.
 class ScreenScaffold extends StatelessWidget {
   const ScreenScaffold({
     super.key,
@@ -200,6 +200,56 @@ class ScreenScaffold extends StatelessWidget {
         ...slivers,
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
       ],
+    );
+  }
+}
+
+/// Text whose digits sit in equal-width slots. Comfortaa has no tabular
+/// figures — its "1" is far narrower than its other digits — so a ticking
+/// readout drawn as plain text would shuffle sideways every second.
+class SteadyDigits extends StatelessWidget {
+  const SteadyDigits(this.text, {super.key, required this.style});
+
+  final String text;
+  final TextStyle style;
+
+  static final Map<TextStyle, double> _digitWidths = <TextStyle, double>{};
+
+  double _widestDigit(BuildContext context) {
+    return _digitWidths.putIfAbsent(style, () {
+      double widest = 0;
+      for (int d = 0; d <= 9; d++) {
+        final TextPainter painter = TextPainter(
+          text: TextSpan(text: '$d', style: style),
+          textDirection: TextDirection.ltr,
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout();
+        if (painter.width > widest) widest = painter.width;
+        painter.dispose();
+      }
+      return widest;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double slot = _widestDigit(context);
+    return Semantics(
+      label: text,
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          for (final String char in text.split(''))
+            if (char.codeUnitAt(0) >= 48 && char.codeUnitAt(0) <= 57)
+              SizedBox(
+                width: slot,
+                child: Text(char, style: style, textAlign: TextAlign.center),
+              )
+            else
+              Text(char, style: style),
+        ],
+      ),
     );
   }
 }

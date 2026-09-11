@@ -40,7 +40,8 @@ the running timer alive and visible.
 - **Insights** — average tracked day, longest unbroken stretch, untracked share
   of waking hours, and which hours you actually work in.
 - **Names** — every activity you have named, sectioned by group, with a select
-  mode for regrouping several at once.
+  mode for regrouping several at once. Hold a name to see its time blocks, then
+  tap one to change when it started and ended or to describe what you did.
 - **Sync** — four steps to put finished blocks on one calendar you pick, plus
   CSV export.
 

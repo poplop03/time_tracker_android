@@ -175,7 +175,7 @@ class DeviceCalendarService {
       calendarId,
       eventId: block.calendarEventId,
       title: includeActivityName ? block.activityName : block.group,
-      description: 'Tracked in Tally',
+      description: _eventDescription(block),
       start: tz.TZDateTime.from(block.startedAt, location),
       end: tz.TZDateTime.from(end, location),
     );
@@ -188,6 +188,13 @@ class DeviceCalendarService {
           : _describe(result, 'The calendar rejected that event.'));
     }
     return id;
+  }
+
+  /// The block's own description first, then the marker that lets a pull skip
+  /// Tally's own events.
+  static String _eventDescription(TrackedBlock block) {
+    final String? note = block.note;
+    return note == null ? 'Tracked in Tally' : '$note\n\nTracked in Tally';
   }
 
   Future<void> deleteEvent(String calendarId, String eventId) async {

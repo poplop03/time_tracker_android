@@ -202,6 +202,133 @@ void main() {
     });
   });
 
+  group('editing a block', () {
+    final DateTime base = DateTime(2026, 9, 7, 9);
+
+    Future<TrackedBlock> seed(String name, int fromHour, int toHour) async {
+      await blocks.addRetroactive(
+        activityName: name,
+        start: base.add(Duration(hours: fromHour)),
+        end: base.add(Duration(hours: toHour)),
+      );
+      return (await blocks.allBlocks())
+          .lastWhere((TrackedBlock b) => b.activityName == name);
+    }
+
+    test('changes times and description, and queues a re-sync', () async {
+      final TrackedBlock block = await seed('Code', 0, 1);
+      await blocks.markSynced(block.id, 'evt-1');
+
+      await blocks.editBlock(
+        id: block.id,
+        start: base.add(const Duration(minutes: 15)),
+        end: base.add(const Duration(hours: 2)),
+        note: '  Refactored the timeline  ',
+      );
+
+      final TrackedBlock edited = (await blocks.allBlocks()).single;
+      expect(edited.startedAt, base.add(const Duration(minutes: 15)));
+      expect(edited.endedAt, base.add(const Duration(hours: 2)));
+      expect(edited.note, 'Refactored the timeline');
+      expect(edited.syncDirty, isTrue);
+      // The event id stays, so the next push updates the event in place.
+      expect(edited.calendarEventId, 'evt-1');
+    });
+
+    test('clearing the description stores it as absent', () async {
+      final TrackedBlock block = await seed('Code', 0, 1);
+      await blocks.editBlock(
+          id: block.id, start: block.startedAt, end: block.endedAt, note: 'x');
+      await blocks.editBlock(
+          id: block.id, start: block.startedAt, end: block.endedAt, note: '  ');
+      expect((await blocks.allBlocks()).single.note, isNull);
+    });
+
+    test('a block does not collide with its own old span', () async {
+      final TrackedBlock block = await seed('Code', 0, 3);
+      final BlockPlacement result = await blocks.editBlock(
+        id: block.id,
+        start: base.add(const Duration(hours: 1)),
+        end: base.add(const Duration(hours: 2)),
+      );
+      expect(result.trimmed, 0);
+      expect(result.removed, 0);
+    });
+
+    test('stretching over a neighbour trims it', () async {
+      final TrackedBlock block = await seed('Code', 0, 1);
+      await seed('Email', 1, 3);
+
+      final BlockPlacement result = await blocks.editBlock(
+        id: block.id,
+        start: base,
+        end: base.add(const Duration(hours: 2)),
+      );
+      expect(result.trimmed, 1);
+      final TrackedBlock email = (await blocks.allBlocks())
+          .firstWhere((TrackedBlock b) => b.activityName == 'Email');
+      expect(email.startedAt, base.add(const Duration(hours: 2)));
+    });
+
+    test('moving inside another block is refused and writes nothing', () async {
+      await seed('Meeting', 0, 4);
+      final TrackedBlock block = await seed('Code', 5, 6);
+
+      await expectLater(
+        blocks.editBlock(
+          id: block.id,
+          start: base.add(const Duration(hours: 1)),
+          end: base.add(const Duration(hours: 2)),
+        ),
+        throwsA(isA<OverlapRejected>()),
+      );
+      final TrackedBlock unchanged = (await blocks.allBlocks())
+          .firstWhere((TrackedBlock b) => b.activityName == 'Code');
+      expect(unchanged.startedAt, base.add(const Duration(hours: 5)));
+    });
+
+    test('an end before the start is refused', () async {
+      final TrackedBlock block = await seed('Code', 1, 2);
+      await expectLater(
+        blocks.editBlock(id: block.id, start: block.endedAt!, end: block.startedAt),
+        throwsA(isA<OverlapRejected>()),
+      );
+    });
+
+    test('a running block only takes a description', () async {
+      final TrackedBlock running = await blocks.start('Live');
+      await blocks.editBlock(
+        id: running.id,
+        start: running.startedAt.subtract(const Duration(hours: 3)),
+        note: 'Pairing on sync',
+      );
+      final TrackedBlock after = (await blocks.currentRunning())!;
+      expect(after.note, 'Pairing on sync');
+      expect(after.startedAt, running.startedAt);
+      expect(after.isRunning, isTrue);
+    });
+
+    test('a vanished block is reported, not silently ignored', () async {
+      await expectLater(
+        blocks.editBlock(id: 999, start: base, end: base.add(const Duration(hours: 1))),
+        throwsA(isA<OverlapRejected>()),
+      );
+    });
+
+    test('an activity\'s blocks come newest first and page by limit', () async {
+      for (int h = 0; h < 5; h++) {
+        await seed('Code', h, h + 1);
+      }
+      final int id = (await blocks.allBlocks()).first.activityId;
+
+      final List<TrackedBlock> page =
+          await blocks.watchActivityBlocks(id, limit: 3).first;
+      expect(page, hasLength(3));
+      expect(page.first.startedAt, base.add(const Duration(hours: 4)));
+      expect(page.last.startedAt, base.add(const Duration(hours: 2)));
+    });
+  });
+
   group('sync bookkeeping', () {
     test('marking synced clears the dirty flag and stores the event id',
         () async {

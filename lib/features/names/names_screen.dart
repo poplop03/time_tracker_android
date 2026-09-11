@@ -7,6 +7,7 @@ import '../../core/time/formatting.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
 import '../shell/widgets.dart';
+import 'block_editor.dart';
 
 class NamesScreen extends ConsumerStatefulWidget {
   const NamesScreen({super.key});
@@ -63,7 +64,7 @@ class _NamesScreenState extends ConsumerState<NamesScreen> {
                   child: Text(
                     _selectMode
                         ? 'Tap names to group them'
-                        : 'Grouped by what you called them',
+                        : 'Hold a name to edit its time blocks',
                     style: context.texts.bodyMedium,
                   ),
                 ),
@@ -116,6 +117,7 @@ class _NamesScreenState extends ConsumerState<NamesScreen> {
                       if (!_selected.remove(a.id)) _selected.add(a.id);
                     });
                   },
+                  onLongPress: () => ActivityBlocksSheet.show(context, a),
                 ),
                 const SizedBox(height: 8),
               ],
@@ -288,6 +290,7 @@ class _ActivityRow extends StatelessWidget {
     required this.selectMode,
     required this.selected,
     required this.onTap,
+    required this.onLongPress,
   });
 
   final ActivitySummary activity;
@@ -295,11 +298,18 @@ class _ActivityRow extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
+  /// Opens the name's time blocks. Off while picking names to group, where a
+  /// hold would be too easy to trigger by accident.
+  final VoidCallback onLongPress;
+
   @override
   Widget build(BuildContext context) {
     final OrganicColors c = context.colors;
-    return InkWell(
+    return Semantics(
+      onLongPressHint: selectMode ? null : 'edit time blocks',
+      child: InkWell(
       onTap: selectMode ? onTap : null,
+      onLongPress: selectMode ? null : onLongPress,
       borderRadius: OrganicRadii.row,
       child: Container(
         constraints: const BoxConstraints(minHeight: kMinTapTarget),
@@ -338,6 +348,7 @@ class _ActivityRow extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }
