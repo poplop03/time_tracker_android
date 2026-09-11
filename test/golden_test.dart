@@ -12,6 +12,9 @@ import 'package:tally/data/prefs/settings_store.dart';
 import 'package:tally/domain/models.dart';
 import 'package:tally/features/insights/insights_screen.dart';
 import 'package:tally/features/names/block_editor.dart';
+import 'package:tally/features/sync/csv_import.dart';
+import 'package:tally/features/sync/csv_import_sheet.dart';
+import 'package:tally/domain/import.dart';
 import 'package:tally/features/names/names_screen.dart';
 import 'package:tally/features/stats/stats_screen.dart';
 import 'package:tally/features/sync/sync_screen.dart';
@@ -248,6 +251,28 @@ void main() {
     await _pumpScreen(tester, const SyncScreen());
     await expectLater(find.byType(SyncScreen),
         matchesGoldenFile('goldens/sync.png'));
+  });
+
+  testWidgets('Sync, import preview', (WidgetTester tester) async {
+    await _pumpScreen(
+      tester,
+      ImportPreviewSheet(
+        fileName: 'tally-2026-09-07.csv',
+        preview: ImportOutcome(
+          added: 184,
+          duplicates: 12,
+          overlapLines: const <int>[41, 97],
+          firstStart: DateTime(2026, 3, 2, 8, 15),
+          lastEnd: DateTime(2026, 9, 7, 18),
+        ),
+        problems: const <RowProblem>[
+          RowProblem(58, 'The start time “tbd” is not a date.'),
+        ],
+        now: _sheetNow,
+      ),
+    );
+    await expectLater(find.byType(ImportPreviewSheet),
+        matchesGoldenFile('goldens/sync_import.png'));
   });
 
   testWidgets('Sync, connected', (WidgetTester tester) async {

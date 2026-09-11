@@ -10,6 +10,7 @@ import '../../providers.dart';
 import '../../services/background_sync.dart';
 import '../shell/widgets.dart';
 import 'csv_export.dart';
+import 'csv_import_sheet.dart';
 import 'device_calendar_service.dart';
 
 /// Four steps: intro, pick a calendar, choose a direction, then the connected
@@ -263,6 +264,8 @@ class _IntroStep extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           const ExportCsvButton(),
+          const SizedBox(height: 10),
+          const ImportCsvButton(),
         ],
       ),
     );
@@ -576,6 +579,8 @@ class _ConnectedStep extends ConsumerWidget {
         ),
         const SizedBox(height: 10),
         const ExportCsvButton(),
+        const SizedBox(height: 10),
+        const ImportCsvButton(),
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,

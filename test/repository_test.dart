@@ -1,8 +1,11 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tally/features/sync/csv_export.dart';
+import 'package:tally/features/sync/csv_import.dart';
 import 'package:tally/data/db/database.dart';
 import 'package:tally/data/repositories/activity_repository.dart';
 import 'package:tally/data/repositories/tracking_repository.dart';
+import 'package:tally/domain/import.dart';
 import 'package:tally/domain/models.dart';
 
 void main() {
@@ -326,6 +329,216 @@ void main() {
       expect(page, hasLength(3));
       expect(page.first.startedAt, base.add(const Duration(hours: 4)));
       expect(page.last.startedAt, base.add(const Duration(hours: 2)));
+    });
+  });
+
+  group('importing', () {
+    final DateTime base = DateTime(2026, 9, 7, 9);
+
+    ImportRow row(int line, String name, int fromHour, int toHour,
+            {String? group, String? note, bool onCalendar = false}) =>
+        ImportRow(
+          line: line,
+          activity: name,
+          group: group,
+          start: base.add(Duration(hours: fromHour)),
+          end: base.add(Duration(hours: toHour)),
+          note: note,
+          alreadyOnCalendar: onCalendar,
+        );
+
+    test('adds rows to an empty database, with groups and descriptions',
+        () async {
+      final ImportOutcome outcome = await blocks.importBlocks(<ImportRow>[
+        row(2, 'Code', 0, 1, group: 'Work', note: 'Parser'),
+        row(3, 'Reading', 2, 3, group: 'Ungrouped'),
+      ]);
+
+      expect(outcome.added, 2);
+      expect(outcome.duplicates, 0);
+      expect(outcome.overlapping, 0);
+      expect(outcome.firstStart, base);
+      expect(outcome.lastEnd, base.add(const Duration(hours: 3)));
+
+      final List<TrackedBlock> all = await blocks.allBlocks();
+      expect(all.first.activityName, 'Code');
+      expect(all.first.groupName, 'Work');
+      expect(all.first.note, 'Parser');
+      expect(all.last.groupName, isNull); // "Ungrouped" means no group
+    });
+
+    test('importing the same file twice adds nothing the second time',
+        () async {
+      final List<ImportRow> rows = <ImportRow>[
+        row(2, 'Code', 0, 1),
+        row(3, 'Email', 1, 2),
+      ];
+      await blocks.importBlocks(rows);
+      final ImportOutcome again = await blocks.importBlocks(rows);
+
+      expect(again.added, 0);
+      expect(again.duplicates, 2);
+      expect(await blocks.allBlocks(), hasLength(2));
+    });
+
+    test('names match regardless of case when spotting duplicates', () async {
+      await blocks.importBlocks(<ImportRow>[row(2, 'Code', 0, 1)]);
+      final ImportOutcome again =
+          await blocks.importBlocks(<ImportRow>[row(2, 'CODE', 0, 1)]);
+      expect(again.duplicates, 1);
+    });
+
+    test('rows overlapping stored blocks are skipped, and those blocks kept',
+        () async {
+      await blocks.addRetroactive(
+        activityName: 'Meeting',
+        start: base.add(const Duration(hours: 1)),
+        end: base.add(const Duration(hours: 3)),
+      );
+
+      final ImportOutcome outcome = await blocks.importBlocks(<ImportRow>[
+        row(2, 'Code', 0, 2),  // runs into the meeting
+        row(3, 'Email', 3, 4), // starts as the meeting ends — fine
+        row(4, 'Lunch', 2, 5), // starts inside the meeting
+      ]);
+
+      expect(outcome.added, 1);
+      expect(outcome.overlapLines, <int>[2, 4]);
+      final TrackedBlock meeting = (await blocks.allBlocks())
+          .firstWhere((TrackedBlock b) => b.activityName == 'Meeting');
+      expect(meeting.startedAt, base.add(const Duration(hours: 1)));
+      expect(meeting.endedAt, base.add(const Duration(hours: 3)));
+    });
+
+    test('rows overlapping each other keep the earlier one', () async {
+      final ImportOutcome outcome = await blocks.importBlocks(<ImportRow>[
+        row(5, 'Later', 1, 3),
+        row(2, 'Earlier', 0, 2),
+      ]);
+      expect(outcome.added, 1);
+      expect(outcome.overlapLines, <int>[5]);
+      expect((await blocks.allBlocks()).single.activityName, 'Earlier');
+    });
+
+    test("nothing after a running timer's start is imported", () async {
+      final TrackedBlock running = await blocks.start('Live');
+      final ImportOutcome outcome = await blocks.importBlocks(<ImportRow>[
+        ImportRow(
+          line: 2,
+          activity: 'Code',
+          start: running.startedAt.add(const Duration(minutes: 1)),
+          end: running.startedAt.add(const Duration(minutes: 30)),
+        ),
+      ]);
+      expect(outcome.added, 0);
+      expect(outcome.overlapping, 1);
+    });
+
+    test('a preview reports the same outcome but writes nothing', () async {
+      await blocks.addRetroactive(
+        activityName: 'Meeting',
+        start: base,
+        end: base.add(const Duration(hours: 1)),
+      );
+      final List<ImportRow> rows = <ImportRow>[
+        row(2, 'Meeting', 0, 1),
+        row(3, 'Code', 0, 2),
+        row(4, 'Email', 2, 3),
+      ];
+
+      final ImportOutcome preview =
+          await blocks.importBlocks(rows, dryRun: true);
+      expect(await blocks.allBlocks(), hasLength(1));
+
+      final ImportOutcome real = await blocks.importBlocks(rows);
+      expect(
+        <Object>[preview.added, preview.duplicates, preview.overlapLines],
+        <Object>[real.added, real.duplicates, real.overlapLines],
+      );
+      expect(await blocks.allBlocks(), hasLength(2));
+    });
+
+    test('an existing activity keeps the group the user gave it', () async {
+      await blocks.addRetroactive(
+        activityName: 'Code',
+        groupName: 'Side project',
+        start: base,
+        end: base.add(const Duration(hours: 1)),
+      );
+      await blocks.importBlocks(<ImportRow>[
+        row(2, 'Code', 2, 3, group: 'Work'),
+        row(3, 'Brand new', 4, 5, group: 'Work'),
+      ]);
+
+      final List<ActivitySummary> summaries =
+          await activities.watchSummaries().first;
+      expect(
+        summaries.firstWhere((ActivitySummary a) => a.name == 'Code').groupName,
+        'Side project',
+      );
+      expect(
+        summaries
+            .firstWhere((ActivitySummary a) => a.name == 'Brand new')
+            .groupName,
+        'Work',
+      );
+    });
+
+    test('blocks already on a calendar are not queued to be pushed again',
+        () async {
+      await blocks.importBlocks(<ImportRow>[
+        row(2, 'Pushed before', 0, 1, onCalendar: true),
+        row(3, 'Never pushed', 2, 3),
+      ]);
+      final List<TrackedBlock> dirty = await blocks.dirtyBlocks();
+      expect(dirty.single.activityName, 'Never pushed');
+      // The old phone's event id is not carried over.
+      expect(
+        (await blocks.allBlocks()).every((TrackedBlock b) => b.calendarEventId == null),
+        isTrue,
+      );
+    });
+
+    test('an empty import is a no-op', () async {
+      final ImportOutcome outcome = await blocks.importBlocks(<ImportRow>[]);
+      expect(outcome.added, 0);
+    });
+
+    test('an export imports into a fresh install as the same blocks',
+        () async {
+      await blocks.addRetroactive(
+        activityName: 'Email, then code',
+        groupName: 'Work',
+        start: base,
+        end: base.add(const Duration(hours: 1, minutes: 30)),
+        note: 'Wrote "the intro"\nand fixed CI',
+      );
+      await blocks.addRetroactive(
+        activityName: 'Reading',
+        start: base.add(const Duration(hours: 3)),
+        end: base.add(const Duration(hours: 4)),
+      );
+      final String csv = CsvExport.buildCsv(await blocks.allBlocks());
+
+      final AppDatabase fresh = AppDatabase.forTesting(NativeDatabase.memory());
+      final TrackingRepository restored =
+          TrackingRepository(fresh, ActivityRepository(fresh));
+      try {
+        final ParsedImport parsed =
+            readImport(csv, now: DateTime(2026, 9, 11, 18));
+        expect(parsed.problems, isEmpty);
+        final ImportOutcome outcome = await restored.importBlocks(parsed.rows);
+        expect(outcome.added, 2);
+
+        String describe(TrackedBlock b) =>
+            '${b.activityName}|${b.groupName}|${b.startedAt}|${b.endedAt}|${b.note}';
+        expect(
+          (await restored.allBlocks()).map(describe),
+          (await blocks.allBlocks()).map(describe),
+        );
+      } finally {
+        await fresh.close();
+      }
     });
   });
 

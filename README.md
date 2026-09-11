@@ -43,7 +43,8 @@ the running timer alive and visible.
   mode for regrouping several at once. Hold a name to see its time blocks, then
   tap one to change when it started and ended or to describe what you did.
 - **Sync** — four steps to put finished blocks on one calendar you pick, plus
-  CSV export.
+  CSV export and import. Import shows what it will add before writing
+  anything, and never changes or removes blocks you already have.
 
 ## Calendar sync
 

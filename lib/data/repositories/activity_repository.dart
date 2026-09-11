@@ -68,8 +68,15 @@ class ActivityRepository {
             .every((int i) => a[i] == b[i]));
   }
 
-  /// Case-insensitive lookup, creating the activity when it is new.
-  Future<ActivityRow> getOrCreate(String rawName, {String? groupName}) async {
+  /// Case-insensitive lookup, creating the activity when it is new. A group
+  /// given for an existing activity moves it into that group — unless
+  /// [keepExistingGroup] is set, as an import does, so that restoring an old
+  /// file cannot undo grouping the user has changed since.
+  Future<ActivityRow> getOrCreate(
+    String rawName, {
+    String? groupName,
+    bool keepExistingGroup = false,
+  }) async {
     final String name = rawName.trim();
     if (name.isEmpty) {
       throw ArgumentError('An activity needs a name');
@@ -78,7 +85,7 @@ class ActivityRepository {
     if (existing != null) {
       // An explicit group choice at start time updates the activity.
       final String? group = _cleanGroup(groupName);
-      if (group != null && group != existing.groupName) {
+      if (!keepExistingGroup && group != null && group != existing.groupName) {
         await (_db.update(_db.activities)
               ..where(($ActivitiesTable t) => t.id.equals(existing.id)))
             .write(ActivitiesCompanion(groupName: Value<String?>(group)));

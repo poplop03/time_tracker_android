@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../../core/time/day.dart';
 import '../../domain/block_edit.dart';
+import '../../domain/import.dart';
 import '../../domain/models.dart';
 import '../db/database.dart';
 import 'activity_repository.dart';
@@ -309,6 +310,118 @@ class TrackingRepository {
     return BlockPlacement(trimmed: trimmed, removed: removed);
   }
 
+  /// Adds imported blocks without disturbing anything already stored. A row
+  /// identical to an existing block counts as a duplicate; a row overlapping
+  /// any block — stored, or added earlier in the same import — is skipped.
+  ///
+  /// With [dryRun] nothing is written, which is how the preview knows what an
+  /// import will do. A real run is one transaction, so a failure part-way
+  /// leaves the database as it was.
+  Future<ImportOutcome> importBlocks(List<ImportRow> rows,
+      {bool dryRun = false}) {
+    Future<ImportOutcome> run() async {
+      if (rows.isEmpty) return ImportOutcome.none;
+
+      final List<ImportRow> ordered = List<ImportRow>.of(rows)
+        ..sort((ImportRow a, ImportRow b) {
+          final int byStart = a.start.compareTo(b.start);
+          return byStart != 0 ? byStart : a.line.compareTo(b.line);
+        });
+      DateTime latestEnd = ordered.first.end;
+      for (final ImportRow row in ordered) {
+        if (row.end.isAfter(latestEnd)) latestEnd = row.end;
+      }
+
+      // Stored blocks never overlap, so in start order they are also in end
+      // order, and a new span only has to be checked against its neighbours.
+      final List<_Span> taken =
+          (await _overlapping(ordered.first.start, latestEnd))
+              .map((TrackedBlock b) => _Span(
+                    b.startedAt,
+                    b.endedAt ?? _openEnded,
+                    b.activityName.toLowerCase(),
+                  ))
+              .toList()
+            ..sort((_Span a, _Span b) => a.start.compareTo(b.start));
+
+      final Map<String, int> activityIds = <String, int>{};
+      final List<int> overlapLines = <int>[];
+      int added = 0;
+      int duplicates = 0;
+      DateTime? firstStart;
+      DateTime? lastEnd;
+
+      for (final ImportRow row in ordered) {
+        final String name = row.activity.toLowerCase();
+        final int at = _firstStartingAtOrAfter(taken, row.start);
+        final _Span? before = at > 0 ? taken[at - 1] : null;
+        final _Span? after = at < taken.length ? taken[at] : null;
+
+        if (after != null &&
+            after.start == row.start &&
+            after.end == row.end &&
+            after.name == name) {
+          duplicates++;
+          continue;
+        }
+        if ((before != null && before.end.isAfter(row.start)) ||
+            (after != null && after.start.isBefore(row.end))) {
+          overlapLines.add(row.line);
+          continue;
+        }
+
+        taken.insert(at, _Span(row.start, row.end, name));
+        added++;
+        firstStart ??= row.start;
+        if (lastEnd == null || row.end.isAfter(lastEnd)) lastEnd = row.end;
+        if (dryRun) continue;
+
+        final int activityId = activityIds[name] ??=
+            (await _activities.getOrCreate(
+          row.activity,
+          groupName: row.group,
+          keepExistingGroup: true,
+        ))
+                .id;
+        await _db.into(_db.blocks).insert(BlocksCompanion.insert(
+              activityId: activityId,
+              startedAt: row.start,
+              endedAt: Value<DateTime?>(row.end),
+              note: Value<String?>(cleanNote(row.note)),
+              syncDirty: Value<bool>(!row.alreadyOnCalendar),
+            ));
+      }
+
+      return ImportOutcome(
+        added: added,
+        duplicates: duplicates,
+        overlapLines: List<int>.unmodifiable(overlapLines),
+        firstStart: firstStart,
+        lastEnd: lastEnd,
+      );
+    }
+
+    return dryRun ? run() : _db.transaction(run);
+  }
+
+  /// Stands in for "still running" when a running block is checked against
+  /// imported rows.
+  static final DateTime _openEnded = DateTime(9999);
+
+  static int _firstStartingAtOrAfter(List<_Span> spans, DateTime start) {
+    int low = 0;
+    int high = spans.length;
+    while (low < high) {
+      final int mid = (low + high) >> 1;
+      if (spans[mid].start.isBefore(start)) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
+  }
+
   Future<List<TrackedBlock>> _overlapping(DateTime start, DateTime end) async {
     final JoinedSelectStatement<HasResultSet, dynamic> query = _joined()
       ..where(_db.blocks.startedAt.isSmallerThanValue(end) &
@@ -400,4 +513,12 @@ class TrackingRepository {
       ..orderBy(<OrderingTerm>[OrderingTerm(expression: _db.blocks.startedAt)]);
     return (await query.get()).map(_map).toList(growable: false);
   }
+}
+
+/// A stretch of time already spoken for during an import.
+class _Span {
+  const _Span(this.start, this.end, this.name);
+  final DateTime start;
+  final DateTime end;
+  final String name;
 }
